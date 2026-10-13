@@ -6,8 +6,8 @@ The package covers the code in these papers:
 
 | Subpackage | Setting | Paper |
 |---|---|---|
-| `statcontracts.multiagent` | Many agents compete for a budget; the principal allocates using all of their e-values at once. | *Strategic Multi-Agent Resource Allocation via Statistical Contracts* (Chugg, Jordan, Ramdas) — "SMAA" |
-| `statcontracts.sequential` | One agent experiments adaptively, choosing a betting parameter each round and when to stop. | *Principal-agent hypothesis testing under adaptive experimentation* (Chugg, Ghosh, Ramdas) — "SPAT" |
+| `statcontracts.multiagent` | Many agents compete for a budget; the principal allocates using all of their e-values at once. | *Strategic Multi-Agent Resource Allocation via Statistical Contracts* (Chugg, Jordan, Ramdas) |
+| `statcontracts.sequential` | One agent experiments adaptively, choosing a betting parameter each round and when to stop. | *Principal-agent hypothesis testing under adaptive experimentation* (Chugg, Ghosh, Ramdas) |
 
 ## Install
 
@@ -35,8 +35,8 @@ src/statcontracts/
     incremental.py    incremental reward schedule (adjuster on the running maximum)
     adjusters.py      admissible adjusters and their induced densities
 experiments/
-  smaa/               reproduces the SMAA optimality-gap figures
-  spat/               reproduces the SPAT figures
+  multiagent/         reproduces the figures of the multi-agent paper
+  sequential/         reproduces the figures of the sequential paper
 tests/
 ```
 
@@ -73,41 +73,16 @@ print(f"CGF-aware threshold efficiency: {cgf / best:.3f}")
 
 ## Reproducing the papers
 
-See [`experiments/smaa/README.md`](experiments/smaa/README.md) and
-[`experiments/spat/README.md`](experiments/spat/README.md).
+See [`experiments/multiagent/README.md`](experiments/multiagent/README.md) and
+[`experiments/sequential/README.md`](experiments/sequential/README.md).
 
 ## Tests
 
 ```bash
 pytest                # everything (~10 s)
-pytest -m "not slow"  # skip the regression runs against the original SPAT code
+pytest -m "not slow"  # skip the slower regression runs
 ```
 
-`tests/test_regression.py` pins outputs of the original SPAT scripts; the
-package reproduces them bit for bit. `tests/test_multiagent.py` contains the
-solver checks against brute-force enumeration that were previously
-`validate_implementation()` in the SMAA experiments script.
-
-## Provenance
-
-The code was moved here from the paper repositories:
-
-| Source | Commit | Now |
-|---|---|---|
-| `SMAA/experiments/mechanisms.py` | `f9962e4` | `multiagent/mechanisms.py` (unchanged, plus the NAP loss) |
-| `SMAA/experiments/optimization_experiments.py` | `f9962e4` | solvers → `multiagent/optimize.py` (unchanged); harness → `experiments/smaa/optimality_gaps.py`; validation → `tests/test_multiagent.py` |
-| `spat/experiments/exact_stopping.py` | `e2dd06f` | `sequential/stopping.py`, `sequential/rewards.py` |
-| `spat/experiments/agent_stopping.py` | `e2dd06f` | strategies → `sequential/simulate.py`; solvers → `sequential/stopping.py`; driver → `experiments/spat/agent_stopping.py` |
-| `spat/experiments/decomposition.py` | `e2dd06f` | `threshold_value_grid` → `sequential/stopping.py`; driver → `experiments/spat/decomposition.py` |
-| `spat/experiments/incremental_stopping.py` | `e2dd06f` | `sequential/incremental.py`; driver → `experiments/spat/incremental_stopping.py` |
-| `spat/experiments/adjusters_growth.py` | `e2dd06f` | `sequential/adjusters.py`; plots → `experiments/spat/adjusters_growth.py` |
-
-The per-family functions of the SPAT code (`sim_grow_subgauss`,
-`sim_grow_betting`, ..., and the `family`/`prm` dictionaries) are replaced
-by reward-process classes with one strategy function each.
-
-These stay in the paper repositories, because they generate TikZ that
-depends on each paper's LaTeX macros: `SMAA/paper/figures/make_mech_polytope.py`,
-`SMAA/slides/figures/*.py`, and the INFORMS supplement packager
-`SMAA/paper/informs/package_code.py`. Each paper repository also keeps its
-original `experiments/` folder, frozen as the submitted supplement.
+`tests/test_regression.py` pins outputs of small-scale versions of the
+sequential experiments. `tests/test_multiagent.py` checks the multi-agent solvers
+against brute-force enumeration.

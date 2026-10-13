@@ -1,0 +1,14 @@
+.DS_Store
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+.pytest_cache/
+.ipynb_checkpoints/
+.claude
+
+# Experiment caches are regenerated automatically
+experiments/**/cache/
