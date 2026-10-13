@@ -6,6 +6,7 @@ The package covers the code in these papers:
 
 | Subpackage | Setting | Paper |
 |---|---|---|
+| `statcontracts.singleshot` | One agent, one dataset; the principal offers a cost and a menu of license functions. | *Principal-agent hypothesis testing* (Bates, Jordan, Sklar, Soloff) |
 | `statcontracts.multiagent` | Many agents compete for a budget; the principal allocates using all of their e-values at once. | *Strategic Multi-Agent Resource Allocation via Statistical Contracts* (Chugg, Jordan, Ramdas) |
 | `statcontracts.sequential` | One agent experiments adaptively, choosing a betting parameter each round and when to stop. | *Principal-agent hypothesis testing under adaptive experimentation* (Chugg, Ghosh, Ramdas) |
 
@@ -23,6 +24,11 @@ pip install -e ".[dev]"      # package + matplotlib + pytest
 
 ```
 src/statcontracts/
+  evalues.py          e-values: Gaussian and Bernoulli likelihood ratios, betting, Hoeffding
+  singleshot/
+    contracts.py      incentive alignment, the agent's best response, the optimal
+                      (Neyman-Pearson) license, the principal's expected utility
+    models.py         evidence models with exact expectations: GaussianMean, Binomial
   multiagent/
     mechanisms.py     AoN, e-BH and cumulative-evidence mechanisms; budget rescaling; NAP loss
     optimize.py       linear and log-utility optimization over P (constraint generation
@@ -41,6 +47,22 @@ tests/
 ```
 
 ## Usage
+
+Single-shot: check whether a protocol is incentive-aligned, and find the
+agent's best response to the menu of all e-values.
+
+```python
+from scipy.stats import norm
+from statcontracts.singleshot import (
+    GaussianMean, ThresholdLicense, is_incentive_aligned, optimal_license)
+
+model = GaussianMean(n=1)             # evidence Z ~ N(theta, 1); null theta <= 0
+C, R = 1.0, 50.0                      # trial cost, market size
+
+status_quo = ThresholdLicense(norm.isf(0.05), payout=R)    # approve if p < 0.05
+is_incentive_aligned([status_quo], C, model, null_types=[0.0])    # False: 0.05 R > C
+f = optimal_license(model, theta1=1.0, theta0=0.0, cost=C, cap=R) # approve if p < C/R
+```
 
 Multi-agent: allocate a budget across agents from their e-values.
 

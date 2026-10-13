@@ -29,6 +29,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
+from statcontracts.evalues import gaussian_lr_log_evalue
 from statcontracts.multiagent import (
     evaluate_log_utility,
     mechanism_aon,
@@ -72,7 +73,7 @@ def sample_instance(
     is_null = rng.random(m) < null_fraction
     means = np.where(is_null, 0.0, 1.0)
     data = rng.normal(means[:, None], np.sqrt(sigma2), size=(m, sample_size))
-    log_e = (data.sum(axis=1) - sample_size / 2.0) / sigma2
+    log_e = gaussian_lr_log_evalue(data, theta1=1.0, theta0=0.0, sigma=np.sqrt(sigma2))
     E = np.exp(np.clip(log_e, -30.0, 30.0))
     costs = np.exp(rng.normal(-0.5 * cost_sigma**2, cost_sigma, size=m))
     values = np.exp(rng.normal(-0.5 * value_sigma**2, value_sigma, size=m))

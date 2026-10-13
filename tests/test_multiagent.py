@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 from scipy.optimize import linprog
 
+from statcontracts.evalues import gaussian_lr_log_evalue
 from statcontracts.multiagent import (
     evaluate_log_utility,
     mechanism_aon,
@@ -183,7 +184,7 @@ def test_full_region_optima_are_feasible():
     while n_checked < 45:
         is_null = rng.random(m) < 0.5
         data = rng.normal(np.where(is_null, 0.0, 1.0)[:, None], 2.0, size=(m, 30))
-        E = np.exp(np.clip((data.sum(axis=1) - 15.0) / 4.0, -30.0, 30.0))
+        E = np.exp(np.clip(gaussian_lr_log_evalue(data, 1.0, 0.0, 2.0), -30.0, 30.0))
         costs = np.exp(rng.normal(-0.5 * 0.55**2, 0.55, size=m))
         values = np.exp(rng.normal(-0.5 * 0.8**2, 0.8, size=m))
         F = costs * E
