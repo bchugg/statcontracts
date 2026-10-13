@@ -1,6 +1,6 @@
 """Statistical contracts with a single agent experimenting adaptively."""
 
-from . import adjusters, incremental
+from . import adjusters, incremental, multiround
 from .rewards import (
     BettingReward,
     GaussianReward,
@@ -31,6 +31,7 @@ from .stopping import (
 __all__ = [
     "adjusters",
     "incremental",
+    "multiround",
     "BettingReward",
     "GaussianReward",
     "HoeffdingReward",

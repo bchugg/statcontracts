@@ -8,7 +8,7 @@ The package covers the code in these papers:
 |---|---|---|
 | `statcontracts.singleshot` | One agent, one dataset; the principal offers a cost and a menu of license functions. | *Principal-agent hypothesis testing* (Bates, Jordan, Sklar, Soloff) |
 | `statcontracts.multiagent` | Many agents compete for a budget; the principal allocates using all of their e-values at once. | *Strategic Multi-Agent Resource Allocation via Statistical Contracts* (Chugg, Jordan, Ramdas) |
-| `statcontracts.sequential` | One agent experiments adaptively, choosing a betting parameter each round and when to stop. | *Principal-agent hypothesis testing under adaptive experimentation* (Chugg, Ghosh, Ramdas) |
+| `statcontracts.sequential` | One agent experiments adaptively, choosing a betting parameter each round and when to stop. | *Principal-agent hypothesis testing under adaptive experimentation* (Chugg, Ghosh, Ramdas); `multiround.py` implements the multi-round contract of Bates et al. |
 
 ## Install
 
@@ -39,6 +39,8 @@ src/statcontracts/
                       (policy and value iteration), Bellman benchmark
     simulate.py       Monte Carlo of the agent's stopping strategies
     incremental.py    incremental reward schedule (adjuster on the running maximum)
+    multiround.py     the finite-horizon multi-round contract with per-round costs, and
+                      the agent's best response by dynamic programming
     adjusters.py      admissible adjusters and their induced densities
 experiments/
   multiagent/         reproduces the figures of the multi-agent paper
@@ -101,8 +103,8 @@ See [`experiments/multiagent/README.md`](experiments/multiagent/README.md) and
 ## Tests
 
 ```bash
-pytest                # everything (~10 s)
-pytest -m "not slow"  # skip the slower regression runs
+pytest                # everything (~25 s)
+pytest -m "not slow"  # skip the slower simulation checks (~6 s)
 ```
 
 `tests/test_regression.py` pins outputs of small-scale versions of the
