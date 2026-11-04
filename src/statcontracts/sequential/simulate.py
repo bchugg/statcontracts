@@ -2,25 +2,27 @@
 
 Every strategy runs through `simulate`, which advances n_sim paths of the
 log-reward W_t = log(R_t / C) and records the discounted log-utility
-delta^tau (W_tau + log C) at the stopping time tau (paths still running at
-max_T are stopped there). A strategy is a pair of callbacks:
+delta^tau (W_tau + log C) at the stopping time tau. Every path runs at least
+one trial, and paths still running at max_T are stopped there and receive
+their discounted log reward at the cap (not zero), so each strategy is
+a.s. finite. A strategy is a pair of callbacks:
 
     bet(t, W, X_sum)   -> parameter for round t, from the state before round t
     stop(t, W, X_sum)  -> boolean stop mask, from the state after round t
 
 where W and X_sum (running sum of the observations) cover the live paths.
 
-Strategies, ordered by decreasing distributional knowledge:
+Strategies:
   * sim_bellman       - full law; joint optimization over (lambda, stop),
                         following a policy from stopping.bellman_benchmark.
   * sim_cgf_optimal   - CGF-optimal lambda (maximizes psi_lambda(rho*)) and
                         threshold R_t >= exp(1/rho*).
-  * sim_cgf_aware     - growth-optimal lambda and exact threshold from its CGF:
+  * sim_cgf_aware     - CGF threshold at the growth-optimal lambda:
                         stop at R_t >= exp(1/rho) where psi(rho) = log(1/delta).
-  * sim_drift_aware   - growth-optimal lambda and closed-form (Wald) threshold
-                        R_t >= exp(mu / |log delta|); the CGF-aware rule with
+  * sim_drift_aware   - drift threshold at the growth-optimal lambda,
+                        R_t >= exp(mu / |log delta|); the CGF threshold with
                         psi linearized.
-  * sim_plug_in       - estimate the drift on the fly; stop at
+  * sim_plug_in       - estimate the drift of the next bet on the fly; stop at
                         R_t >= max(C, exp(mu_hat / |log delta|)).
 
 Each simulation reseeds its generator, so strategies evaluated with the same
@@ -69,7 +71,13 @@ def simulate(reward, delta, C, bet, stop, n_sim=20000, max_T=2500,
 
 
 def sim_threshold(reward, lam, delta, C, log_threshold, **kwargs):
-    """Commit to `lam` and stop at the first t with log R_t >= log_threshold."""
+    """Commit to `lam` and, after at least one trial, stop at the threshold or cap.
+
+    Paths that have not hit log R_t >= log_threshold by max_T receive their
+    discounted log reward at the cap. This implements an a.s.-finite strategy
+    even when the uncapped threshold rule has a positive probability of never
+    stopping.
+    """
     w_star = log_threshold - np.log(C)
     return simulate(reward, delta, C,
                     bet=lambda t, W, X_sum: lam,
@@ -77,13 +85,13 @@ def sim_threshold(reward, lam, delta, C, log_threshold, **kwargs):
 
 
 def sim_drift_aware(reward, delta, C, **kwargs):
-    """Growth-optimal lambda (drift known) and the closed-form Wald threshold."""
+    """Drift threshold at the growth-optimal lambda (the agent knows the drift)."""
     return sim_threshold(reward, reward.growth_optimal_lambda(), delta, C,
                          reward.drift() / np.abs(np.log(delta)), **kwargs)
 
 
 def sim_cgf_aware(reward, delta, C, **kwargs):
-    """Growth-optimal lambda and the exact CGF threshold (agent knows psi)."""
+    """CGF threshold at the growth-optimal lambda (the agent knows psi)."""
     rho = reward.cgf_root(delta)
     return sim_threshold(reward, reward.growth_optimal_lambda(), delta, C,
                          1.0 / rho, **kwargs)
@@ -96,9 +104,12 @@ def sim_cgf_optimal(reward, delta, C, **kwargs):
 
 
 def sim_plug_in(reward, delta, C, **kwargs):
-    """Re-estimate the mean every round and plug it into the GRO parameter and drift.
+    """Re-estimate the mean every round and plug it into the GRO parameter.
 
-    Stop at the first t with R_t >= max(C, exp(mu_hat_t / |log delta|)). The
+    Round t bets reward.plug_in_lambda of the mean of the first t - 1
+    observations. After round t, mu_hat_t = reward.plug_in_drift is the
+    estimated drift of the next bet under the fitted law, and the agent stops
+    at the first t with R_t >= max(C, exp(mu_hat_t / |log delta|)). The
     R_t >= C floor (equivalently W_t >= 0) prevents stopping at a loss on a
     noisy early estimate, removing the need for a burn-in period.
     """

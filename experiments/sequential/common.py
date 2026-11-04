@@ -15,6 +15,7 @@ import statcontracts
 HERE = os.path.dirname(os.path.abspath(__file__))
 FIGDIR = os.path.join(HERE, "figures")
 CACHEDIR = os.path.join(HERE, "cache")
+RESULTDIR = os.path.join(HERE, "results")
 
 # Set RECOMPUTE=1 (env) or pass --recompute to force the sweeps to rerun;
 # otherwise cached results are loaded so plotting can be re-iterated
@@ -50,6 +51,15 @@ def save_figure(fig, filename):
     path = os.path.join(FIGDIR, filename)
     fig.savefig(path, bbox_inches="tight", dpi=150)
     plt.close(fig)
+    print(f"  saved {path}", flush=True)
+
+
+def save_text(filename, text):
+    """Write a JSON record or LaTeX table to results/."""
+    os.makedirs(RESULTDIR, exist_ok=True)
+    path = os.path.join(RESULTDIR, filename)
+    with open(path, "w") as f:
+        f.write(text)
     print(f"  saved {path}", flush=True)
 
 

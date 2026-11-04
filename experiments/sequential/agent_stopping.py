@@ -1,5 +1,5 @@
 """
-Agent stopping strategies as distributional knowledge degrades (Figure 2).
+Agent stopping strategies with known and estimated distributional parameters.
 
 Two reward families (see statcontracts.sequential.rewards):
 
@@ -9,9 +9,9 @@ Two reward families (see statcontracts.sequential.rewards):
     X_i ~ Bernoulli(p), testing H_0: E[X] <= m. As a simple baseline we also
     include the mean-only Hoeffding reward (HoeffdingReward).
 
-Strategies are described in statcontracts.sequential.simulate. The Bellman
-optimum is the denominator: efficiency = E[discounted log-utility of
-strategy] / E[discounted log-utility of Bellman]. Common random numbers
+Strategies are described in statcontracts.sequential.simulate. The numerical
+Bellman benchmark is the denominator: efficiency = E[discounted log-utility
+of strategy] / E[discounted log-utility of Bellman]. Common random numbers
 (fixed seed) couple strategies to reduce ratio variance.
 
 Results are cached in cache/; pass --recompute to rerun the sweeps.
@@ -35,11 +35,12 @@ from statcontracts.sequential import (
 from common import cached, save_figure, use_paper_style
 
 
-# Per-strategy display style: color, legend label, marker.
+# Per-strategy display style: color, legend label, marker. The internal keys
+# match the simulator names; the labels follow the paper.
 STRAT_STYLE = {
-    "CGF-optimal":           ("#7570b3", r"CGF-optimal (bet and threshold)", "v"),
-    "CGF-aware threshold":   ("#1b9e77", r"CGF-aware threshold", "D"),
-    "drift-aware threshold": ("#2166ac", r"Drift-aware threshold", "o"),
+    "CGF-optimal":           ("#7570b3", r"CGF-optimal", "v"),
+    "CGF-aware threshold":   ("#1b9e77", r"CGF threshold at $\lambda_{\mathrm{GRO}}$", "D"),
+    "drift-aware threshold": ("#2166ac", r"Drift threshold at $\lambda_{\mathrm{GRO}}$", "o"),
     "Hoeffding (mean only)": ("#d95f02", r"Hoeffding (mean only)", "s"),
     "plug-in threshold":     ("#e7298a", r"Plug-in threshold", "^"),
 }
@@ -50,7 +51,7 @@ LEGEND_ORDER = ["CGF-optimal", "CGF-aware threshold", "drift-aware threshold",
 
 
 def evaluate(reward, delta, C, n_sim, hoeffding=None):
-    """Mean discounted log-utility of the Bellman optimum and each strategy."""
+    """Mean discounted log-utility of the Bellman benchmark and each strategy."""
     G, w_grid, lam_opt, _ = bellman_benchmark(reward, delta, np.log(C))
 
     def mean(result):
@@ -66,7 +67,7 @@ def evaluate(reward, delta, C, n_sim, hoeffding=None):
         "plug-in threshold": mean(sim_plug_in(reward, delta, C, n_sim=n_sim)),
     }
     if hoeffding is not None:
-        # Mean-only agent, compared against the betting Bellman optimum.
+        # Mean-only agent, compared against the betting Bellman benchmark.
         out["Hoeffding (mean only)"] = mean(sim_drift_aware(hoeffding, delta, C,
                                                             n_sim=n_sim))
     return out
@@ -112,7 +113,7 @@ def plot_eff(xs, results, strat_order, xlabel, filename, ylim_lo=None,
         c, lab, mk = STRAT_STYLE[name]
         ratio = np.array(results[name]) / ub
         ax.plot(xs, ratio, marker=mk, color=c, label=lab, markersize=7)
-    ax.axhline(1.0, color="gray", lw=1.2, ls="--", label="Bellman optimum")
+    ax.axhline(1.0, color="gray", lw=1.2, ls="--", label="Bellman benchmark")
     ax.set_xlabel(xlabel)
     ax.set_ylabel("Relative efficiency")
     ax.set_ylim(ylim_lo, 1.03)
@@ -148,14 +149,14 @@ def plot_grid(panels, filename, nrows=2, ncols=2, figsize=(11, 8.5),
                             label=lab, markersize=7)
             handles[name] = line
         hb = ax.axhline(1.0, color="gray", lw=1.2, ls="--")
-        handles["Bellman optimum"] = hb
+        handles["Bellman benchmark"] = hb
         ax.set_xlabel(panel["xlabel"])
         if i % ncols == 0:
             ax.set_ylabel("Relative efficiency", fontsize=label_fs)
         ax.set_ylim(None, 1.03)
         ax.set_title(panel["title"], fontsize=title_fs)
 
-    order = [n for n in LEGEND_ORDER if n in handles] + ["Bellman optimum"]
+    order = [n for n in LEGEND_ORDER if n in handles] + ["Bellman benchmark"]
     labels = [STRAT_STYLE[n][1] if n in STRAT_STYLE else n for n in order]
     fig.legend([handles[n] for n in order], labels, frameon=False,
                loc="lower center", ncol=legend_ncol, fontsize=legend_fs,
@@ -224,7 +225,7 @@ if __name__ == "__main__":
     # 1x4 row (AAAI two-column figure* version).
     plot_grid(panels, "efficiency_row.pdf",
               nrows=1, ncols=4, figsize=(22, 4.2),
-              legend_ncol=6, legend_y=-0.04, rect_bottom=0.14, title_fs=19,
+              legend_ncol=3, legend_y=-0.04, rect_bottom=0.22, title_fs=19,
               legend_fs=22)
 
     print("Done.", flush=True)

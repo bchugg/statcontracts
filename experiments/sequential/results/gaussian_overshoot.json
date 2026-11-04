@@ -1,0 +1,68 @@
+{
+  "theta": 0.3,
+  "sigma": 0.5,
+  "C": 1,
+  "r0": 0,
+  "e0": 1,
+  "paths_per_setting": 400000,
+  "seed": 20261017,
+  "simultaneous_confidence": 0.99,
+  "results": [
+    {
+      "delta": 0.9,
+      "rho": 0.3692189699578596,
+      "lambda": 1.902403437718842,
+      "original_drift": 0.11832867633509409,
+      "tilted_drift": 0.4523923549805584,
+      "mean_ratio": 0.9629681242997867,
+      "standard_error": 7.701749120942539e-05,
+      "hoeffding_margin": 0.0027366641525559867,
+      "lower_bound": 0.9602314601472307,
+      "lower_rounded_down": 0.96,
+      "second_moment_estimate": 0.765649911581931,
+      "maximum_crossing_time": 103
+    },
+    {
+      "delta": 0.95,
+      "rho": 0.22176732154458625,
+      "lambda": 1.5419552959170038,
+      "original_drift": 0.16538332194928929,
+      "tilted_drift": 0.29720326682581183,
+      "mean_ratio": 0.9902177646195964,
+      "standard_error": 2.2488340710671623e-05,
+      "hoeffding_margin": 0.0027366641525559867,
+      "lower_bound": 0.9874811004670404,
+      "lower_rounded_down": 0.987,
+      "second_moment_estimate": 0.47073887385151364,
+      "maximum_crossing_time": 177
+    },
+    {
+      "delta": 0.98,
+      "rho": 0.10091125933416163,
+      "lambda": 1.3346847154501298,
+      "original_drift": 0.1777325034280147,
+      "tilted_drift": 0.22267291120702423,
+      "mean_ratio": 0.9983872054242172,
+      "standard_error": 3.917300746949711e-06,
+      "hoeffding_margin": 0.0027366641525559867,
+      "lower_bound": 0.9956505412716612,
+      "lower_rounded_down": 0.995,
+      "second_moment_estimate": 0.33846708144696896,
+      "maximum_crossing_time": 259
+    },
+    {
+      "delta": 0.995,
+      "rho": 0.027092983935786352,
+      "lambda": 1.2334169454902952,
+      "original_drift": 0.17986041346926235,
+      "tilted_drift": 0.19016467017782626,
+      "mean_ratio": 0.9998977087449333,
+      "standard_error": 2.5646902087383986e-07,
+      "hoeffding_margin": 0.0027366641525559867,
+      "lower_bound": 0.9971610445923773,
+      "lower_rounded_down": 0.997,
+      "second_moment_estimate": 0.28334411540888776,
+      "maximum_crossing_time": 559
+    }
+  ]
+}

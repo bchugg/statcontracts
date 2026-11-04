@@ -1,4 +1,9 @@
-"""Incremental reward schedule with the Shafer adjuster.
+"""Incremental reward schedule with the Shafer adjuster (historical objective).
+
+This module maximizes the terminal discounted log utility of an adjusted
+running maximum. That is not the discounted-receipts objective for incremental
+(milestone) payments in the current version of Chugg, Ghosh, and Ramdas; see
+milestones.py for that experiment.
 
 Reward: R_t = C * kappa * (E_t^*)^{1-kappa}, using the adjuster
 A_kappa(y) = kappa * y^{1-kappa} on the running maximum E_t^* = max_{k<=t} E_k

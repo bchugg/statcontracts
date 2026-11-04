@@ -1,8 +1,11 @@
 """Checks of the reward processes, stopping solvers, and simulators."""
 
+import math
+
 import numpy as np
 import pytest
 from scipy.integrate import quad
+from scipy.stats import binom
 
 from statcontracts.sequential import (
     BettingReward,
@@ -10,6 +13,7 @@ from statcontracts.sequential import (
     HoeffdingReward,
     RewardProcess,
     beta_threshold,
+    capped_threshold_value,
     kl_bernoulli,
     numeric_cgf_optimal,
     sim_cgf_aware,
@@ -68,6 +72,35 @@ def test_gaussian_cgf_optimal_matches_numeric_search():
                                    rtol=1e-6)
 
 
+@pytest.mark.parametrize("p, m, delta", [(0.7, 0.5, 0.9), (0.7, 0.5, 0.995),
+                                         (0.02, 0.01, 0.9)])
+def test_interior_cgf_optimal_matches_numeric_search(p, m, delta):
+    b = BettingReward(p, m)
+    rho, lam = b.interior_cgf_optimal(delta)
+    np.testing.assert_allclose(b.cgf(lam, rho), np.log(1 / delta), rtol=1e-10)
+    np.testing.assert_allclose((rho, lam), b.cgf_optimal(delta), rtol=1e-6)
+
+
+def test_interior_cgf_optimal_needs_an_interior_root():
+    with pytest.raises(ValueError):
+        BettingReward(0.55, 0.5).interior_cgf_optimal(0.5)
+
+
+def test_plug_in_drift_is_the_drift_of_the_next_bet():
+    g = GaussianReward(0.3, 0.5)
+    for mean in [-0.2, 0.0, 0.1, 0.3, 6.0]:
+        lam = g.plug_in_lambda(mean)
+        assert 0 <= lam <= 20
+        np.testing.assert_allclose(g.plug_in_drift(mean),
+                                   GaussianReward(mean, 0.5).increment_moments(lam)[0])
+    b = BettingReward(0.7, 0.5)
+    for mean in [0.0, 0.3, 0.5, 0.7, 1.0]:
+        p_hat = min(mean, 0.99)
+        assert b.plug_in_lambda(mean) == max(p_hat - 0.5, 0) / 0.25
+        expected = kl_bernoulli(p_hat, 0.5) if p_hat > 0.5 else 0.0
+        np.testing.assert_allclose(b.plug_in_drift(mean), expected, atol=1e-15)
+
+
 def test_betting_drift_is_kl_and_dominates_hoeffding():
     for p in [0.55, 0.7, 0.9]:
         b, h = BettingReward(p, 0.5), HoeffdingReward(p, 0.5)
@@ -75,14 +108,47 @@ def test_betting_drift_is_kl_and_dominates_hoeffding():
         assert h.drift() <= b.drift()  # Pinsker
 
 
+def _test_lambdas(reward):
+    """A parameter with positive drift and one with negative drift."""
+    return [0.5 * reward.growth_optimal_lambda(),
+            1.2 * reward.max_positive_drift_lambda()]
+
+
+@pytest.mark.parametrize("reward", REWARDS, ids=repr)
+def test_walk_parts(reward):
+    """E[S_n^+] - E[S_n^-] = n mu, and the Bernoulli closed forms match direct sums."""
+    n = np.arange(1, 40)
+    lams = _test_lambdas(reward)
+    if isinstance(reward, BettingReward):
+        lams.append(-0.5)  # a negative bet: the up-step is the loss
+    for lam in lams:
+        mu = reward.increment_moments(lam)[0]
+        pos, neg = reward.expected_pos_part(lam, n), reward.expected_neg_part(lam, n)
+        assert np.all(pos >= 0) and np.all(neg >= 0)
+        np.testing.assert_allclose(pos - neg, n * mu, rtol=1e-9, atol=1e-12)
+        if isinstance(reward, GaussianReward):
+            continue
+        up, dn = reward.increments(np.array([lam]))[0][0]
+        for k in [1, 7, 39]:
+            s = np.arange(k + 1) * up + (k - np.arange(k + 1)) * dn
+            pmf = binom.pmf(np.arange(k + 1), k, reward.p)
+            np.testing.assert_allclose(reward.expected_neg_part(lam, k),
+                                       pmf @ np.maximum(-s, 0), rtol=1e-10, atol=1e-14)
+            np.testing.assert_allclose(reward.expected_pos_part(lam, k),
+                                       pmf @ np.maximum(s, 0), rtol=1e-10, atol=1e-14)
+
+
 # ===================================================================
 # Stopping
 # ===================================================================
 
+@pytest.mark.parametrize("sign", ["positive", "negative"])
 @pytest.mark.parametrize("reward", REWARDS[:2], ids=repr)
-def test_beta_threshold_matches_monte_carlo(reward):
-    """beta = E[max_{0<=k<=N} S_k] with P(N = n) = (1 - delta) delta^n."""
-    lam, delta, n_sim = 0.5 * reward.growth_optimal_lambda(), 0.9, 200000
+def test_beta_threshold_matches_monte_carlo(reward, sign):
+    """beta = E[max_{0<=k<=N} S_k] with P(N = n) = (1 - delta) delta^n, for either sign of drift."""
+    lam = _test_lambdas(reward)[sign == "negative"]
+    delta, n_sim = 0.9, 200000
+    assert (reward.increment_moments(lam)[0] > 0) == (sign == "positive")
     rng = np.random.default_rng(0)
     N = rng.geometric(1 - delta, size=n_sim) - 1
     S = np.zeros(n_sim)
@@ -118,6 +184,36 @@ def test_bellman_solvers_agree_and_stop_at_beta(reward):
     for kappa in [0.7 * beta, 1.3 * beta]:
         assert threshold_value_grid(reward, delta, w_grid, lam, kappa) <= v_beta
     np.testing.assert_allclose(v_beta, np.interp(0.0, w_grid, G_pi), rtol=1e-3)
+
+
+@pytest.mark.parametrize("p, m, bet, threshold", [
+    (.7, .5, .8, .7), (.02, .01, 54.5, 1.17), (.7, .5, .8, 0.), (.7, .5, 0., 0.),
+    (.7, .5, 1.9, 1.0)])
+def test_capped_threshold_value_matches_backward_induction(p, m, bet, threshold):
+    """Forward first-passage recursion against backward evaluation on the full count tree."""
+    n, delta = 60, .9
+    up, down = math.log(1 + bet * (1 - m)), math.log(1 - bet * m)
+    value = np.arange(n + 1) * up + (n - np.arange(n + 1)) * down
+    for t in reversed(range(n)):
+        w = np.arange(t + 1) * up + (t - np.arange(t + 1)) * down
+        continuation = delta * ((1 - p) * value[:-1] + p * value[1:])
+        value = continuation if t == 0 else np.where(w >= threshold, w, continuation)
+    forward = capped_threshold_value(BettingReward(p, m), bet, delta, threshold,
+                                     horizon=n)
+    assert abs(value[0] - forward["value"]) < 1e-12
+
+
+def test_capped_threshold_value_approaches_beta_value():
+    """With the default cap, the capped value is within its error bound of the uncapped one."""
+    reward, delta = BettingReward(0.7, 0.5), 0.95
+    beta = beta_threshold(reward, 1.0, delta)
+    a = capped_threshold_value(reward, 1.0, delta, beta)
+    b = capped_threshold_value(reward, 1.0, delta, beta, horizon=4 * a["horizon"])
+    assert a["cap_error_bound"] <= 1e-12
+    assert abs(a["value"] - b["value"]) <= a["cap_error_bound"]
+    # The exact threshold beats nearby thresholds.
+    for kappa in [0.8 * beta, 1.25 * beta]:
+        assert capped_threshold_value(reward, 1.0, delta, kappa)["value"] <= a["value"]
 
 
 # ===================================================================
@@ -184,3 +280,21 @@ def test_koolen_adjuster_budget():
     W = 30.0
     total, _ = quad(adjusters.h_koolen, 0, W, limit=500)
     np.testing.assert_allclose(total, 1 - np.log(2) / np.log1p(np.exp(W)), rtol=1e-8)
+
+
+@pytest.mark.parametrize("budget, h, atom", [
+    (lambda u: adjusters.budget_shafer(u, 0.5), lambda w: adjusters.h_shafer(w, 0.5), 0.5),
+    (adjusters.budget_choe, adjusters.h_choe, 0.0),
+    (adjusters.budget_koolen, adjusters.h_koolen, 1 / (2 * np.log(2))),
+    (lambda u: adjusters.budget_mixture(u, 1.0),
+     lambda w: adjusters.h_mixture(w, 1.0, n_kappa=4000), 0.5),
+], ids=["shafer", "choe", "koolen", "mixture-1"])
+def test_budgets_accumulate_densities(budget, h, atom):
+    """B(u) = A(e^u)/e^u + int_0^u h, with the atom A(1) at zero."""
+    np.testing.assert_allclose(budget(np.array(0.0)), atom, atol=1e-6)
+    for u in [0.5, 2.0, 8.0]:
+        integral, _ = quad(lambda w: float(h(np.asarray(w))), 0, u, limit=200)
+        np.testing.assert_allclose(budget(np.array(u)), h(np.asarray(u)) + integral,
+                                   atol=1e-5)
+    values = budget(np.linspace(0, 20, 400))
+    assert np.all(np.diff(values) >= -1e-10) and values[-1] <= 1 + 1e-9

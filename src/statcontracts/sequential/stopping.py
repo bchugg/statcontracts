@@ -1,10 +1,13 @@
 """Optimal stopping for the agent: exact thresholds and Bellman solvers.
 
   * beta_threshold        - exact optimal threshold for a fixed parameter
-                            (Proposition 3 of Chugg, Ghosh, and Ramdas): log R_t >= beta, where
+                            (Chugg, Ghosh, and Ramdas): log R_t >= beta, where
                             beta = E[max_{0<=k<=N} S_k],  N ~ Geometric(1 - delta),
                             evaluated through Spitzer's identity as
                             beta = mu * delta / (1 - delta) + sum_n delta^n / n * E[S_n^-].
+  * capped_threshold_value - exact value of a capped threshold rule for a
+                            two-point (Bernoulli) reward, by first-passage
+                            recursion; no state grid or Monte Carlo.
   * solve_bellman_pi      - the discretized Bellman equation solved exactly by
                             policy iteration with sparse linear solves.
   * solve_bellman_vi      - the same discretization solved by value iteration
@@ -23,6 +26,8 @@ import numpy as np
 from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import spsolve
 
+from .rewards import _BernoulliReward
+
 
 N_GRID = 4000
 
@@ -32,25 +37,80 @@ N_GRID = 4000
 # ===================================================================
 
 def beta_threshold(reward, lam, delta, tol=1e-12, n_max=200000):
-    """Exact optimal log-reward threshold for a fixed parameter (Prop. 3).
+    """Exact optimal log-reward threshold for a fixed parameter.
 
-    Uses E[S_n^+] = n mu + E[S_n^-], so that
-        beta = mu delta / (1 - delta) + sum_{n>=1} delta^n / n E[S_n^-].
-    The neglected tail of the second sum is at most
-    E[Delta^-] delta^{K+1} / (1 - delta); summation stops once this bound (or
-    the current term) falls below `tol`. Returns +inf if the drift is <= 0.
+    By Spitzer's identity, beta = sum_{n>=1} delta^n / n E[S_n^+]. For
+    positive drift, E[S_n^+] = n mu + E[S_n^-] gives
+        beta = mu delta / (1 - delta) + sum_{n>=1} delta^n / n E[S_n^-];
+    for nonpositive drift, sum E[S_n^+] directly to avoid cancellation.
+    In either case the neglected tail is bounded by the corresponding
+    one-step positive/negative moment times delta^{K+1} / (1 - delta), and
+    the series stops once this bound falls below `tol`. The threshold
+    describes the supremum even when it is not reached a.s.; finite caps
+    approach that value. No positive-drift restriction is imposed.
     """
     mu, neg1 = reward.increment_moments(lam)
-    if mu <= 0:
-        return np.inf
-    beta = mu * delta / (1 - delta)
-    for n in range(1, n_max + 1):
-        term = delta ** n / n * reward.expected_neg_part(lam, n)
-        beta += term
-        tail = neg1 * delta ** (n + 1) / (1 - delta)
-        if tail < tol or (n > 50 and term < tol * (1 - delta)):
-            break
-    return beta
+    positive = mu > 0
+    first = neg1 if positive else max(0.0, mu + neg1)
+    base = max(mu, 0.0) * delta / (1 - delta)
+    if first == 0:
+        return base
+    cutoff = max(1, int(np.ceil(np.log(tol * (1 - delta) / first)
+                               / np.log(delta))) - 1)
+    if cutoff > n_max:
+        raise RuntimeError("Spitzer-series tail tolerance needs more terms")
+    n = np.arange(1, cutoff + 1, dtype=float)
+    if positive:
+        part = reward.expected_neg_part(lam, n)
+    else:
+        part = reward.expected_pos_part(lam, n)
+    return float(base + np.sum(delta ** n / n * np.maximum(part, 0.0)))
+
+
+def capped_threshold_value(reward, lam, delta, threshold, horizon=None,
+                           tol=1e-12):
+    """Value (C = 1) of betting `lam` until log R_t >= threshold, capped.
+
+    For a two-point reward (BettingReward or HoeffdingReward), propagate the
+    probability of each up-step count among paths that have not yet crossed,
+    absorbing each path at its first crossing. Paths that reach the cap
+    `horizon` without crossing receive their signed discounted log reward
+    there. Every path runs at least one trial. With horizon=None, the cap is
+    the first one at which the analytical error bound relative to the uncapped
+    rule, delta^N (N E|Delta| + delta (threshold + up)), is below `tol`.
+    Returns {"value", "horizon", "cap_error_bound"}.
+    """
+    if not isinstance(reward, _BernoulliReward):
+        raise TypeError("capped_threshold_value needs a two-point reward")
+    if threshold < 0:
+        raise ValueError("The log-evidence threshold must be nonnegative.")
+    incr, (p, _) = reward.increments(np.array([lam]))
+    up, down = incr[0]
+    mean_abs = p * abs(up) + (1 - p) * abs(down)
+
+    def error_bound(n):
+        return delta ** n * (n * mean_abs + delta * (threshold + up))
+
+    if horizon is None:
+        horizon = 1
+        while error_bound(horizon) > tol:
+            horizon += 1
+    if horizon < 1:
+        raise ValueError("The stopping cap must allow at least one trial.")
+    live = np.array([1.0])
+    hit_value = 0.0
+    for n in range(1, horizon + 1):
+        nxt = np.zeros(n + 1)
+        nxt[:-1] += (1 - p) * live
+        nxt[1:] += p * live
+        successes = np.arange(n + 1)
+        w = successes * up + (n - successes) * down
+        crossed = w >= threshold
+        hit_value += delta ** n * (nxt[crossed] @ w[crossed])
+        nxt[crossed] = 0.0
+        live = nxt
+    return {"value": float(hit_value + delta ** horizon * (live @ w)),
+            "horizon": horizon, "cap_error_bound": error_bound(horizon)}
 
 
 # ===================================================================

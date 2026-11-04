@@ -4,19 +4,22 @@ Decomposing the agent's efficiency loss, and auditing the Bellman benchmark.
 For each setting of the four sweeps in agent_stopping.py this script computes,
 on a fine grid and without Monte Carlo noise, the values (C = 1, W_0 = 0) of
 
-  * drift-aware threshold at lambda_GRO      (heuristic threshold)
-  * CGF-aware threshold at lambda_GRO        (heuristic threshold)
+  * drift threshold at lambda_GRO            (heuristic threshold)
+  * CGF threshold at lambda_GRO              (heuristic threshold)
   * exact threshold beta at lambda_GRO       (optimal stopping, growth-optimal bet)
-  * exact threshold at the best fixed lambda (optimal fixed-parameter strategy)
+  * exact threshold at the best fixed lambda found by the numerical search
   * Bellman optimum                          (adaptive parameter and stopping)
 
 so that the gap to the Bellman optimum splits into stopping-rule error,
 fixed-parameter selection error, and the value of adapting the parameter.
 All values come from solving the discretized dynamic program exactly (policy
-iteration / policy evaluation with sparse linear solves).
+iteration / policy evaluation with sparse linear solves). The fixed-parameter
+search covers the whole Bellman parameter grid, including parameters with
+zero or negative drift, plus the growth-optimal and CGF-optimal parameters;
+it reports the best parameter found, without certifying global optimality.
 
 It also audits the Bellman benchmark: it compares the policy-iteration
-benchmark used in Figure 2 (bellman_benchmark) against the value-iteration
+benchmark used in the efficiency figure (bellman_benchmark) against the value-iteration
 solver on an 800-point grid used in the submitted version, and checks (for
 betting) whether negative bets, which are outside the paper's menu
 lambda in [0, 1/m), are ever used.
@@ -44,13 +47,13 @@ from common import cached, save_figure, use_paper_style
 
 N_LAM_FIXED = 35       # coarse search over the fixed parameter ...
 N_LAM_REFINE = 11      # ... then a local refinement around the best one
-N_SIM = 20000          # Monte Carlo cross-checks (same as Figure 2)
+N_SIM = 20000          # Monte Carlo cross-checks (same as the efficiency figure)
 
 STYLE = {
-    "drift":     ("#2166ac", r"Drift-aware threshold at $\lambda_{\mathrm{GRO}}$", "o"),
-    "cgf":       ("#1b9e77", r"CGF-aware threshold at $\lambda_{\mathrm{GRO}}$", "D"),
+    "drift":     ("#2166ac", r"Drift threshold at $\lambda_{\mathrm{GRO}}$", "o"),
+    "cgf":       ("#1b9e77", r"CGF threshold at $\lambda_{\mathrm{GRO}}$", "D"),
     "exact_gro": ("#7570b3", r"Exact threshold at $\lambda_{\mathrm{GRO}}$", "s"),
-    "exact_opt": ("#d95f02", r"Best fixed $\lambda$ (exact threshold)", "^"),
+    "exact_opt": ("#d95f02", r"Best fixed $\lambda$ found (exact threshold)", "^"),
 }
 ORDER = ["drift", "cgf", "exact_gro", "exact_opt"]
 
@@ -78,10 +81,10 @@ def submitted_vi_benchmark(reward, delta):
 def evaluate(reward, delta):
     abs_ln_delta = abs(np.log(delta))
     lam_gro = reward.growth_optimal_lambda()
-    lam_hi_pos = reward.max_positive_drift_lambda()
     beta_gro = beta_threshold(reward, lam_gro, delta)
 
-    # Bellman benchmark of Figure 2; its grid is reused for everything else.
+    # Bellman benchmark of the efficiency figure; its grid is reused for
+    # everything else.
     G, w_grid, best_lam, res = bellman_benchmark(reward, delta)
     hi = w_grid[-1]
 
@@ -94,7 +97,7 @@ def evaluate(reward, delta):
                         ("exact_gro", beta_gro)]:
         out[name] = threshold_value_grid(reward, delta, w_grid, lam_gro, kappa)
 
-    # Check Proposition 3 on the grid: optimal stopping at lambda_GRO should
+    # Check the exact threshold on the grid: optimal stopping at lambda_GRO should
     # stop exactly on {w >= beta}.
     G1, _, _, _ = solve_bellman_pi(reward, delta, 0.0, w_grid,
                                    np.array([lam_gro]))
@@ -109,12 +112,16 @@ def evaluate(reward, delta):
             return -np.inf, b
         return threshold_value_grid(reward, delta, w_grid, lam, b), b
 
-    lams = np.linspace(0.05 * lam_hi_pos, 0.98 * lam_hi_pos, N_LAM_FIXED)
+    lam_hi = reward.bellman_lambdas()[-1]
+    _, lam_cgf = reward.cgf_optimal(delta)
+    lams = np.unique(np.r_[np.linspace(0.01, lam_hi, N_LAM_FIXED),
+                           lam_gro, lam_cgf])
     vals = [fixed_value(l)[0] for l in lams]
     k = int(np.argmax(vals))
-    step = lams[1] - lams[0]
+    step = lam_hi / (N_LAM_FIXED - 1)
     fine = np.linspace(max(lams[k] - step, 1e-3),
-                       min(lams[k] + step, 0.995 * lam_hi_pos), N_LAM_REFINE)
+                       min(lams[k] + step, lam_hi), N_LAM_REFINE)
+    fine = np.unique(np.r_[fine, lams[k], lam_cgf])
     fine_vals = [fixed_value(l) for l in fine]
     kk = int(np.argmax([v for v, _ in fine_vals]))
     out["lam_stop"] = float(fine[kk])
@@ -227,7 +234,7 @@ def plot_decomposition(panels, filename, nrows, ncols, figsize, legend_ncol,
             ax.set_ylabel("Relative efficiency", fontsize=label_fs)
         ax.set_ylim(None, 1.01)
         ax.set_title(panel["title"], fontsize=title_fs)
-    labels = [STYLE[k][1] for k in ORDER] + ["Bellman optimum"]
+    labels = [STYLE[k][1] for k in ORDER] + ["Bellman benchmark"]
     fig.legend([handles[k] for k in ORDER + ["bellman"]], labels,
                frameon=False, loc="lower center", ncol=legend_ncol,
                fontsize=legend_fs, bbox_to_anchor=(0.5, legend_y))

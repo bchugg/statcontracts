@@ -1,5 +1,7 @@
 """
-Incremental reward schedule: compare stopping strategies.
+Historical experiment: terminal log utility of an adjusted running maximum.
+This is not the discounted-receipts objective for incremental payments in the
+current manuscript; see incremental_milestones.py for that experiment.
 
 Reward R_t = C * kappa * (E_t^*)^{1-kappa} on a sub-Gaussian e-process with
 Gaussian data; see statcontracts.sequential.incremental for the strategies.

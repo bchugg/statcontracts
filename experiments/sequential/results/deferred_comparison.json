@@ -1,0 +1,170 @@
+{
+  "C": 1,
+  "large_jump": {
+    "p": 0.02,
+    "m": 0.01,
+    "delta": 0.9,
+    "rho": 0.8532890360997225,
+    "upper": 0.4311311004920129,
+    "strategies": {
+      "cgf": {
+        "value": 0.18428477076732694,
+        "horizon": 600,
+        "cap_error_bound": 1.8109328943030364e-25,
+        "lambda": 54.49509511096015,
+        "threshold": 1.1719358361509893,
+        "value_over_upper": 0.4274448550731287
+      },
+      "cgf_exact": {
+        "value": 0.19123690068344507,
+        "horizon": 600,
+        "cap_error_bound": 1.8078835149579985e-25,
+        "lambda": 54.49509511096015,
+        "threshold": 0.20707810464042553,
+        "value_over_upper": 0.44357018193584924
+      },
+      "feasible_exact": {
+        "value": 0.26111366298268784,
+        "horizon": 600,
+        "cap_error_bound": 4.7527225462462185e-26,
+        "lambda": 15.5,
+        "threshold": 0.30172222414440075,
+        "value_over_upper": 0.6056479402314081
+      }
+    }
+  },
+  "upper_bound_comparison": [
+    {
+      "p": 0.7,
+      "m": 0.5,
+      "delta": 0.9,
+      "rho": 0.6020633287073918,
+      "upper": 0.6110311384705429,
+      "strategies": {
+        "drift": {
+          "value": 0.45188493808749597,
+          "horizon": 308,
+          "cap_error_bound": 9.74042422601984e-13,
+          "lambda": 0.7999999999999998,
+          "threshold": 0.7809650322164097,
+          "value_over_upper": 0.7395448605427837
+        },
+        "cgf_at_growth": {
+          "value": 0.4704466741303483,
+          "horizon": 308,
+          "cap_error_bound": 9.777023488254866e-13,
+          "lambda": 0.7999999999999998,
+          "threshold": 1.2850884990956746,
+          "value_over_upper": 0.7699225857914735
+        },
+        "cgf_optimal": {
+          "value": 0.6077307118581795,
+          "horizon": 316,
+          "cap_error_bound": 9.628284712938322e-13,
+          "lambda": 1.5748467494864395,
+          "threshold": 1.6609548403271195,
+          "value_over_upper": 0.9945985950558516
+        }
+      }
+    },
+    {
+      "p": 0.7,
+      "m": 0.5,
+      "delta": 0.95,
+      "rho": 0.3994733083710076,
+      "upper": 0.9209111934702213,
+      "strategies": {
+        "drift": {
+          "value": 0.795497542689532,
+          "horizon": 647,
+          "cap_error_bound": 9.793779590939696e-13,
+          "lambda": 0.7999999999999998,
+          "threshold": 1.6041644329443334,
+          "value_over_upper": 0.8638156950746796
+        },
+        "cgf_at_growth": {
+          "value": 0.8169088903416402,
+          "horizon": 647,
+          "cap_error_bound": 9.81670459766656e-13,
+          "lambda": 0.7999999999999998,
+          "threshold": 2.228493053831145,
+          "value_over_upper": 0.8870658714260223
+        },
+        "cgf_optimal": {
+          "value": 0.9119653954178484,
+          "horizon": 656,
+          "cap_error_bound": 9.868610132835455e-13,
+          "lambda": 1.2156469225951836,
+          "threshold": 2.5032961628346344,
+          "value_over_upper": 0.9902859275510997
+        }
+      }
+    },
+    {
+      "p": 0.7,
+      "m": 0.5,
+      "delta": 0.98,
+      "rho": 0.2007069126819377,
+      "upper": 1.832918638703913,
+      "strategies": {
+        "drift": {
+          "value": 1.7608854509632497,
+          "horizon": 1690,
+          "cap_error_bound": 9.828867459347159e-13,
+          "lambda": 0.7999999999999998,
+          "threshold": 4.0728639588664155,
+          "value_over_upper": 0.9607002808419259
+        },
+        "cgf_at_growth": {
+          "value": 1.7745551846098075,
+          "horizon": 1690,
+          "cap_error_bound": 9.839854700893766e-13,
+          "lambda": 0.7999999999999998,
+          "threshold": 4.827251793453711,
+          "value_over_upper": 0.9681581861509275
+        },
+        "cgf_optimal": {
+          "value": 1.8312540712656993,
+          "horizon": 1700,
+          "cap_error_bound": 9.896211249451825e-13,
+          "lambda": 0.9708073087193945,
+          "threshold": 4.982389428632736,
+          "value_over_upper": 0.9990918487034478
+        }
+      }
+    },
+    {
+      "p": 0.7,
+      "m": 0.5,
+      "delta": 0.995,
+      "rho": 0.05770376160389905,
+      "upper": 6.375311261278064,
+      "strategies": {
+        "drift": {
+          "value": 6.351308637879472,
+          "horizon": 7095,
+          "cap_error_bound": 9.954711420067032e-13,
+          "lambda": 0.7999999999999998,
+          "threshold": 16.4153998912414,
+          "value_over_upper": 0.9962350664281481
+        },
+        "cgf_at_growth": {
+          "value": 6.356570527468037,
+          "horizon": 7095,
+          "cap_error_bound": 9.957797243646605e-13,
+          "lambda": 0.7999999999999998,
+          "threshold": 17.279949904132266,
+          "value_over_upper": 0.9970604205752505
+        },
+        "cgf_optimal": {
+          "value": 6.3749477898046,
+          "horizon": 7106,
+          "cap_error_bound": 9.961337996372287e-13,
+          "lambda": 0.8431272812935838,
+          "threshold": 17.329892752302477,
+          "value_over_upper": 0.9999429876505526
+        }
+      }
+    }
+  ]
+}

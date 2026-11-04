@@ -1,6 +1,6 @@
 """Statistical contracts with a single agent experimenting adaptively."""
 
-from . import adjusters, incremental, multiround
+from . import adjusters, incremental, milestones, multiround
 from .rewards import (
     BettingReward,
     GaussianReward,
@@ -23,6 +23,7 @@ from .simulate import (
 from .stopping import (
     bellman_benchmark,
     beta_threshold,
+    capped_threshold_value,
     solve_bellman_pi,
     solve_bellman_vi,
     threshold_value_grid,
@@ -31,6 +32,7 @@ from .stopping import (
 __all__ = [
     "adjusters",
     "incremental",
+    "milestones",
     "multiround",
     "BettingReward",
     "GaussianReward",
@@ -49,6 +51,7 @@ __all__ = [
     "simulate",
     "bellman_benchmark",
     "beta_threshold",
+    "capped_threshold_value",
     "solve_bellman_pi",
     "solve_bellman_vi",
     "threshold_value_grid",

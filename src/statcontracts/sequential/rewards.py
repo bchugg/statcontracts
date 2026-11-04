@@ -15,6 +15,8 @@ The Hoeffding reward is the mean-only baseline for bounded data: it uses
 only the mean of X, so its drift 2(p - m)^2 is at most KL(p || m) (Pinsker).
 """
 
+import math
+
 import numpy as np
 from scipy.optimize import minimize_scalar
 from scipy.special import roots_hermite
@@ -50,7 +52,11 @@ class RewardProcess:
         raise NotImplementedError
 
     def expected_neg_part(self, lam, n):
-        """E[S_n^-] for the random walk S_n of log-increments after n steps."""
+        """E[S_n^-] for the random walk S_n of log-increments; vectorized over n."""
+        raise NotImplementedError
+
+    def expected_pos_part(self, lam, n):
+        """E[S_n^+] for the random walk S_n of log-increments; vectorized over n."""
         raise NotImplementedError
 
     def cgf(self, lam, s):
@@ -189,14 +195,17 @@ class GaussianReward(RewardProcess):
 
     def increment_moments(self, lam):
         mean = lam * self.theta - lam ** 2 / 8
-        sd = lam * self.sigma
-        neg = sd * norm.pdf(mean / sd) - mean * norm.cdf(-mean / sd)
-        return mean, neg
+        return mean, _normal_pos_part(-mean, abs(lam) * self.sigma)
 
     def expected_neg_part(self, lam, n):
+        n = np.asarray(n, dtype=float)
         mean = n * (lam * self.theta - lam ** 2 / 8)
-        sd = np.sqrt(n) * lam * self.sigma
-        return sd * norm.pdf(mean / sd) - mean * norm.cdf(-mean / sd)
+        return _normal_pos_part(-mean, np.sqrt(n) * abs(lam) * self.sigma)
+
+    def expected_pos_part(self, lam, n):
+        n = np.asarray(n, dtype=float)
+        mean = n * (lam * self.theta - lam ** 2 / 8)
+        return _normal_pos_part(mean, np.sqrt(n) * abs(lam) * self.sigma)
 
     def cgf(self, lam, s):
         th, sig = self.theta, self.sigma
@@ -241,10 +250,12 @@ class GaussianReward(RewardProcess):
         return rho, th / (0.25 - rho * sig ** 2)
 
     def plug_in_lambda(self, mean_hat):
-        return np.clip(4 * mean_hat, 0.01, 20.0)
+        return np.clip(4 * np.asarray(mean_hat), 0.0, 20.0)
 
     def plug_in_drift(self, mean_hat):
-        return 2 * mean_hat ** 2
+        """Drift of the next (clipped) plug-in bet under the fitted mean."""
+        lam = self.plug_in_lambda(mean_hat)
+        return lam * mean_hat - lam ** 2 / 8
 
 
 # ===================================================================
@@ -277,12 +288,36 @@ class _BernoulliReward(RewardProcess):
         neg = (1 - p) * max(-dn, 0.0) + p * max(-up, 0.0)
         return p * up + (1 - p) * dn, neg
 
+    def _walk(self, lam):
+        """(up, dn, p) relabeled, if needed, so that up >= dn.
+
+        Then S_n = n dn + K (up - dn) with K ~ Binomial(n, p), and
+        E[K; K in A] = n p P(K' + 1 in A) with K' ~ Binomial(n - 1, p).
+        """
+        up, dn, p = self._up(lam), self._dn(lam), self.p
+        if up < dn:
+            return dn, up, 1 - p
+        return up, dn, p
+
     def expected_neg_part(self, lam, n):
-        up, dn = self._up(lam), self._dn(lam)
-        k = np.arange(n + 1)
-        s = k * up + (n - k) * dn
-        neg = s < 0
-        return float(np.sum(binom.pmf(k[neg], n, self.p) * (-s[neg])))
+        up, dn, p = self._walk(lam)
+        n = np.asarray(n, dtype=float)
+        jump = up - dn
+        if jump == 0:
+            return n * max(-dn, 0.0)
+        k = np.ceil(-n * dn / jump) - 1           # largest count with S_n < 0
+        return (-n * dn * binom.cdf(k, n, p)
+                - jump * n * p * binom.cdf(k - 1, n - 1, p))
+
+    def expected_pos_part(self, lam, n):
+        up, dn, p = self._walk(lam)
+        n = np.asarray(n, dtype=float)
+        jump = up - dn
+        if jump == 0:
+            return n * max(dn, 0.0)
+        k = np.floor(-n * dn / jump) + 1          # smallest count with S_n > 0
+        return (n * dn * binom.sf(k - 1, n, p)
+                + jump * n * p * binom.sf(k - 2, n - 1, p))
 
     def cgf(self, lam, s):
         p = self.p
@@ -336,16 +371,55 @@ class BettingReward(_BernoulliReward):
         return self._bisect_positive_drift(1 / self.m - 0.01)
 
     def plug_in_lambda(self, mean_hat):
+        """Growth-optimal bet for the fitted law, with the mean clipped at 0.99."""
         m = self.m
-        p_hat = np.clip(mean_hat, m + 0.01, 1 - 0.01)
-        return np.clip((p_hat - m) / (m * (1 - m)),
-                       -1.0 / (1 - m) + 0.01, 1.0 / m - 0.01)
+        p_hat = np.clip(mean_hat, 0.0, 0.99)
+        return np.maximum(p_hat - m, 0.0) / (m * (1 - m))
 
     def plug_in_drift(self, mean_hat):
+        """Drift of the next plug-in bet under the fitted (clipped) law.
+
+        This is KL(p_hat || m) when p_hat > m, and zero otherwise.
+        """
         m = self.m
-        p_hat = np.clip(mean_hat, m + 0.001, 1 - 0.001)
-        return (p_hat * np.log(p_hat / m)
-                + (1 - p_hat) * np.log((1 - p_hat) / (1 - m)))
+        p_hat = np.clip(mean_hat, 0.0, 0.99)
+        lam = self.plug_in_lambda(mean_hat)
+        return p_hat * np.log1p(lam * (1 - m)) + (1 - p_hat) * np.log1p(-lam * m)
+
+    def interior_cgf_optimal(self, delta):
+        """rho* and the CGF-optimal bet, when the root is interior.
+
+        Requires m < p and log(1/delta) < log(p/m), so that rho* lies in
+        (0, 1). There the rho-th moment is strictly concave in lambda, and its
+        first-order condition gives the maximizing bet explicitly; rho* is
+        then found by bisecting the log moment. More precise than the generic
+        `cgf_optimal`. Returns (rho_star, lam_cgf).
+        """
+        p, m = self.p, self.m
+        target = -math.log(delta)
+        if not (0 < m < p < 1 and 0 < target < math.log(p / m)):
+            raise ValueError("needs m < p and log(1/delta) < log(p/m)")
+        log_odds = math.log(p * (1 - m) / ((1 - p) * m))
+
+        def optimum(rho):
+            log_ratio = -log_odds / (1 - rho)
+            ratio = math.exp(log_ratio)
+            denominator = m + (1 - m) * ratio
+            bet = (1 - ratio) / denominator
+            log_moment = math.log(p + (1 - p) * math.exp(rho * log_ratio))
+            return bet, log_moment - rho * math.log(denominator)
+
+        lo, hi = 0.0, 1.0
+        for _ in range(70):
+            rho = (lo + hi) / 2
+            if optimum(rho)[1] < target:
+                lo = rho
+            else:
+                hi = rho
+        rho = (lo + hi) / 2
+        bet, log_moment = optimum(rho)
+        assert abs(log_moment - target) < 1e-13
+        return rho, bet
 
 
 class HoeffdingReward(_BernoulliReward):
@@ -375,6 +449,13 @@ class HoeffdingReward(_BernoulliReward):
 
     def max_positive_drift_lambda(self):
         return 8 * (self.p - self.m)
+
+
+def _normal_pos_part(mean, sd):
+    """E[Y^+] for Y ~ N(mean, sd^2), allowing sd = 0."""
+    if np.all(sd == 0):
+        return np.maximum(mean, 0.0)
+    return sd * norm.pdf(mean / sd) + mean * norm.cdf(mean / sd)
 
 
 def kl_bernoulli(p, m):

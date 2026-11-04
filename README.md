@@ -6,9 +6,9 @@ The package covers the code in these papers:
 
 | Subpackage | Setting | Paper |
 |---|---|---|
-| `statcontracts.singleshot` | One agent, one dataset; the principal offers a cost and a menu of license functions. | *Principal-agent hypothesis testing* (Bates, Jordan, Sklar, Soloff) |
-| `statcontracts.multiagent` | Many agents compete for a budget; the principal allocates using all of their e-values at once. | *Strategic Multi-Agent Resource Allocation via Statistical Contracts* (Chugg, Jordan, Ramdas) |
-| `statcontracts.sequential` | One agent experiments adaptively, choosing a betting parameter each round and when to stop. | *Principal-agent hypothesis testing under adaptive experimentation* (Chugg, Ghosh, Ramdas); `multiround.py` implements the multi-round contract of Bates et al. |
+| `statcontracts.singleshot` | One agent, one dataset; the principal offers a cost and a menu of license functions. | [*Principal-agent hypothesis testing*](https://arxiv.org/abs/2205.06812) (Bates, Jordan, Sklar, Soloff) |
+| `statcontracts.multiagent` | Many agents compete for a budget; the principal allocates using all of their e-values at once. | [*Strategic Multi-Agent Resource Allocation via Statistical Contracts*](https://arxiv.org/abs/2610.18336) (Chugg, Jordan, Ramdas) |
+| `statcontracts.sequential` | One agent experiments adaptively, choosing a betting parameter each round and when to stop. | [*Principal-agent hypothesis testing under adaptive experimentation*](https://arxiv.org/abs/2610.38872) (Chugg, Ghosh, Ramdas); `multiround.py` implements the multi-round contract of [Bates et al.](https://arxiv.org/abs/2205.06812) (their Section 2.4 and Appendix B) |
 
 ## Install
 
@@ -35,13 +35,18 @@ src/statcontracts/
                       with a min-cut separation oracle) and over the compact region Q
   sequential/
     rewards.py        reward processes: GaussianReward, BettingReward, HoeffdingReward
-    stopping.py       exact fixed-parameter threshold (Spitzer), Bellman solvers
+    stopping.py       exact fixed-parameter threshold (Spitzer, any sign of the drift),
+                      exact capped threshold values (first passage), Bellman solvers
                       (policy and value iteration), Bellman benchmark
-    simulate.py       Monte Carlo of the agent's stopping strategies
-    incremental.py    incremental reward schedule (adjuster on the running maximum)
+    simulate.py       Monte Carlo of the agent's stopping strategies (deferred rewards)
+    milestones.py     incremental milestone payments: first-passage values of fixed
+                      bets, a numerical Bellman policy, and the plug-in policy
+    incremental.py    historical incremental objective (terminal log utility of an
+                      adjusted running maximum)
     multiround.py     the finite-horizon multi-round contract with per-round costs, and
                       the agent's best response by dynamic programming
-    adjusters.py      admissible adjusters and their induced densities
+    adjusters.py      admissible adjusters, their induced densities, and their
+                      cumulative milestone budgets
 experiments/
   multiagent/         reproduces the figures of the multi-agent paper
   sequential/         reproduces the figures of the sequential paper
@@ -80,7 +85,8 @@ A = rescale_m1(mechanism_ebh(E, Delta, c), B)                  # -> [0, 20, 18]
 A_opt, n_cuts, _ = solve_linear_full(c * E, c, Delta, B, values=np.ones(3))
 ```
 
-Sequential: compare an agent's stopping strategies against the Bellman optimum.
+Sequential, deferred rewards: compare an agent's stopping strategies against the
+Bellman benchmark.
 
 ```python
 from statcontracts.sequential import (
@@ -92,7 +98,20 @@ delta, C = 0.995, 1.0                 # discount factor, entry cost
 G, w_grid, lam_policy, _ = bellman_benchmark(reward, delta)
 best = sim_bellman(reward, delta, C, G, w_grid, lam_policy).utilities.mean()
 cgf = sim_cgf_aware(reward, delta, C).utilities.mean()
-print(f"CGF-aware threshold efficiency: {cgf / best:.3f}")
+print(f"CGF threshold efficiency: {cgf / best:.3f}")
+```
+
+Sequential, incremental rewards: discounted milestone receipts of a fixed bet,
+relative to a numerical Bellman policy.
+
+```python
+from statcontracts.sequential.milestones import crossing_values, solve_milestone_bellman
+
+reward, delta = BettingReward(p=0.7, m=0.5), 0.9
+levels, payouts = (2.0, 4.0, 8.0), [0.2, 0.4, 6.4]   # 80% of the null budget on the last milestone
+gro = crossing_values(reward, reward.growth_optimal_lambda(), delta, levels)[0] @ payouts
+bellman = solve_milestone_bellman(reward, delta, levels, payouts)["value"]
+print(f"growth-optimal bet: {gro / bellman:.3f} of the Bellman value")
 ```
 
 ## Reproducing the papers
@@ -103,10 +122,12 @@ See [`experiments/multiagent/README.md`](experiments/multiagent/README.md) and
 ## Tests
 
 ```bash
-pytest                # everything (~25 s)
-pytest -m "not slow"  # skip the slower simulation checks (~6 s)
+pytest                # everything (~50 s)
+pytest -m "not slow"  # skip the slower simulation checks (~15 s)
 ```
 
 `tests/test_regression.py` pins outputs of small-scale versions of the
-sequential experiments. `tests/test_multiagent.py` checks the multi-agent solvers
+sequential experiments, including the large-jump values reported in the paper.
+`tests/test_milestones.py` checks the milestone computations against an
+independent scalar first-passage recursion and analytic hitting values. `tests/test_multiagent.py` checks the multi-agent solvers
 against brute-force enumeration.
